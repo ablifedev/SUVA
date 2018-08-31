@@ -4,32 +4,13 @@
 ####################################################################################
 # Copyright (C) 2015-2019 by ABLIFE
 ####################################################################################
-# 名称：expression_quantity_calculation.py
-# 描述：计算表达量
-# 作者：程超
-# 创建时间：2015-4-10
-# 联系方式：chaocheng@ablife.cc
-####################################################################################
-# 修改记录
-####################################################################################
-# Date           Version       Author            ChangeLog
-# 2015-4-10      v0.1          ChengChao         创建测试版本
-# 2015-7-24      v1.0          ChengChao         加入对bed文件支持；对于bed格式先扫描所有
-#                                                所有基因，记录区域信息，再扫描bed iv
-#
-#
-#####################################################################################
+
 
 """
-程序功能说明：
-1.计算gene表达量
-2.randCheck_gene
-3.randCheck_mRNA
-程序设计思路：
-利用gffutils和HTSeq包进行统计
+
 """
 
-# 导入必要的包
+# 
 import re
 import os
 import sys
@@ -44,12 +25,10 @@ sys.setdefaultencoding('utf-8')
 
 import subprocess
 import threading
-import gffutils
 import HTSeq
 import numpy
 import multiprocessing
 import signal
-from matplotlib import pyplot
 
 sys.path.insert(1, os.path.split(os.path.realpath(__file__))[0] + "/../")
 # print(sys.path)
