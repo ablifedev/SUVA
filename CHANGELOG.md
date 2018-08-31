@@ -15,4 +15,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
-[Unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v0.0.1...v0.0.2
+[Unreleased]: https://github.com/ablifedev/SUVA
