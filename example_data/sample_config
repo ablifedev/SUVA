@@ -1,0 +1,2 @@
+#sample	test	control	test_star_outdir	control_star_outdir
+sample1	tumor1	normal1	/suva/example_data/tumor	/suva/example_data/normal

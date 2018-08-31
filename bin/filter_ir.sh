@@ -1,0 +1,7 @@
+ls *_combine_sj | cat | perl -ne 'chomp;$f=$_;open OUT,">$f\_filter";open IN,$f;while(<IN>){chomp;@line=split(/\t/);if($line[4]+$line[7]>=10 && $line[5]+$line[8]>5 && $line[6]+$line[9]>5 && ($line[5]+$line[6])/2+$line[4]>5 && ($line[8]+$line[9])/2+$line[7]>5){$avg_br_n = ($line[5]+$line[6])/2;$avg_br_t = ($line[8]+$line[9])/2;$rn=$avg_br_n/($avg_br_n+$line[4]);$rt=$avg_br_t/($avg_br_t+$line[7]);next if ($rt<0.1&&$rn<0.1);print OUT join("\t",@line[0..6]),"\t$avg_br_n\t$rn","\t$line[7]\t$line[8]\t$line[9]\t$avg_br_t\t$rt","\n";}}'
+
+# 2.存在其他可变情况的跳过
+
+# ls *_combine_sj_filter | cat | perl -ne 'chomp;$f=$_;$fn=$f;$fn=~s/_filter//;%h=();open IN,$fn;while(<IN>){chomp;@line=split;$h{"$line[0]\t$line[1]"}+=1;$h{"$line[0]\t$line[2]"}+=1;}close IN;open OUT,">$f\_filter2";open IN,$f;while(<IN>){chomp;@line=split(/\t/);next if $h{"$line[0]\t$line[1]"}>1;next if $h{"$line[0]\t$line[2]"}>1;print OUT $_,"\n";}'
+
+ls *_combine_sj_filter | cat | perl -ne 'chomp;$f=$_;$fn=$f;$fn=~s/_filter//;%h=();open IN,$fn;while(<IN>){chomp;@line=split;$len=$line[2]-$line[1]+1;$h{"$line[0]\t$line[1]"}=$len if not defined($h{"$line[0]\t$line[1]"});$h{"$line[0]\t$line[2]"}=$len if not defined($h{"$line[0]\t$line[2]"});$h{"$line[0]\t$line[1]"}=$len if $h{"$line[0]\t$line[1]"}>$len;$h{"$line[0]\t$line[2]"}=$len if $h{"$line[0]\t$line[2]"}>$len;}close IN;open OUT,">$f\_filter2";open IN,$f;while(<IN>){chomp;@line=split(/\t/);$len=$line[2]-$line[1]+1;next if $len>$h{"$line[0]\t$line[1]"};next if $len>$h{"$line[0]\t$line[2]"};print OUT $_,"\n";}'
