@@ -8,7 +8,7 @@ Website： https://github.com/ablifedev/SUVA/
 
 ## Download
 
-Download current release: [SUVA_v1.0](https://github.com/ablifedev/SUVA/archive/SUVA_v1.0.tar.gz)
+Download current release: [SUVA_v2.0](https://github.com/ablifedev/SUVA/archive/SUVA_v2.0.tar.gz)
 
 
 ## Installation
@@ -19,9 +19,9 @@ Required software:
 
 * Perl (>=5.10, https://www.perl.org/get.html)
 
-* Python2 (>=2.7 or >=3, https://www.python.org/downloads/)
+* Python3 (>=3, https://www.python.org/downloads/)
 
-* R (>=3.2.0, https://cloud.r-project.org/)
+* R (>=3.5.0, https://cloud.r-project.org/)
 
 Required python packages:
 
@@ -29,13 +29,13 @@ Required python packages:
 
 After all of the requirments being installed, you can install the program as followed:   
 
-1. Unzip the file `SUVA_v1.0.tar.gz`:
-    `tar -zxf SUVA_v1.0.tar.gz`
+1. Unzip the file `SUVA_v2.0.tar.gz`:
+    `tar -zxf SUVA_v2.0.tar.gz`
 
 
 ## Usage
 
 You can follow the example instruction in example data folder. Simply, after you make a config file, you can run the pipeline with the command:
 
-    `perl suva.pl -c sample_config -g gff_file -a geneanno_file`
+    `perl suva.pl -c sample_config -g gff_file -a geneanno_file -p fdr_filter -t cpu`
 
