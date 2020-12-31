@@ -259,21 +259,20 @@ sub Make_pre_cmd {
 		
 		# print OUT3 "cd $outdir/outdir/pre && ln -s -f $dir/suva_sj.txt.br ".$sample."_sj.txt.br &&";
 		my $c = "python3 $Bin/splice_site_sj_stat.py -t $outdir/outdir/pre/sj_uniq -s ".$sample."_sj.txt -o ".$sample."_ss_sjreads.txt && cat ".$sample."_ss_sjreads.txt".' | perl -ne \'BEGIN{%h=();open IN,"'.$sample.'_sj.txt.br";while(<IN>){chomp;@line=split(/\t/);$k="$line[0]\t$line[1]\t$line[3]";$h{$k}=$line[5];$k="$line[0]\t$line[2]\t$line[3]";$h{$k}=$line[6];}close IN;}chomp;@line=split(/\t/);$k="$line[0]\t$line[1]\t$line[2]";$line[3]+=$h{$k};print join("\t",@line),"\n";\' > '.$sample.'_ss_sjreads_final.txt && cat '.$sample.'_sj.txt | perl -ne \'chomp;@line=split(/\t/);$n="$line[0]:$line[1]:$line[2]:$line[5]";print $n,"\t",$line[4],"\n";\' > '.$sample.'_sj_stat.txt';
-		print OUT3 $c,"&\n";
+		print OUT3 $c,"&&\n";
 		$tn++;
-		if ($tn % $thread == 0) {
-			print OUT3 "wait\n";
-		}
+		# if ($tn % $thread == 0) {
+		# 	print OUT3 "wait\n";
+		# }
 	}
 
 	# print OUT3 "wait\n";
 	close OUT3;
 
-	## TODO: for sge
-	# print OUT "\nperl /public/bin/qsub-sge.pl ./run_cal_boundaryreads.sh\n\n\n";
 	
-	print OUT "\nsh run_cal_boundaryreads.sh\n\n\n";
-	
+	# print OUT "\nsh run_cal_boundaryreads.sh\n\n\n";
+	## support SGE
+	print OUT "\nperl $Bin/qsub-sge.pl ./run_cal_boundaryreads.sh\n\n\n";
 
 }
 
