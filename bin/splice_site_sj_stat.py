@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3.6
 # -*- coding: utf-8 -*-
 
 ####################################################################################
@@ -39,8 +39,8 @@ import datetime
 
 from optparse import OptionParser, OptionGroup
 
-reload(sys)
-sys.setdefaultencoding('utf-8')
+# reload(sys)
+# sys.setdefaultencoding('utf-8')
 
 import subprocess
 import threading
@@ -51,14 +51,14 @@ import multiprocessing
 import signal
 from matplotlib import pyplot
 
-sys.path.insert(1, os.path.split(os.path.realpath(__file__))[0] + "/../")
+# sys.path.insert(1, os.path.split(os.path.realpath(__file__))[0] + "/../")
 # print(sys.path)
-from ablib.utils.tools import *
+# from ablib.utils.tools import *
 
 # 检查python的版本，我们需要使用python2.7
 # TODO: HTSeq升级到python3版本后升级程序到python3
-if sys.version_info < (2, 7):
-    print("Python Version error: please use phthon2.7")
+if sys.version_info < (3, 0):
+    print("Python Version error: please use phthon3.0")
     sys.exit(-1)
 
 # 程序版本号
@@ -76,8 +76,8 @@ def configOpt():
     # basic options
     p.add_option('-t', '--totalsj', dest='totalsj',
                  action='store', type='string', help='totalsj file')
-    p.add_option('-b', '--brfile', dest='brfile',
-                 action='store', type='string', help='br file')
+    p.add_option('-s', '--suvasj', dest='suvasj',
+                 action='store', type='string', help='suvasj file')
     p.add_option('-o', '--outfile', dest='outfile', default='Mapping_distribution.txt',
                  action='store', type='string', help='gene expression file')
 
@@ -114,6 +114,10 @@ def listToString(x):
     for a in x:
         rVal += a + ' '
     return rVal
+
+# pool watcher for keybord interrupt
+def init_worker():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 # 解析参数
@@ -232,106 +236,92 @@ def getTotalBase(iv, coverage):
 
 
 # @profile
-def readChrwithBam():
-    # print(chr)
-    reads_dict = {}
-
-    ss_complex = {}
-    ss_complex_total = {}
-    ss_use = {}
+def readChrwithBam(chr, olp):
+    print(chr)
     
-
+    # GL000009.2      81150   122564  .       15      -
     totalsjfile = opt.totalsj
+    suvasjfile = opt.suvasj
 
-    # gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    ga = HTSeq.GenomicArray("auto", stranded=True, typecode='i')
+    gas = HTSeq.GenomicArray([chr], stranded=True, typecode="i")
 
-    f = open(totalsjfile)
+    olpclu = {}
+
+    f = open(suvasjfile)
 
     for eachLine in f:
         line = eachLine.strip().split("\t")
-
-        if int(line[6])<2:
+        # print(line[0])
+        if line[0] != chr:
             continue
+        # print(eachLine)
 
-        # if int(line[4])<opt.sjreads:
-        #     continue
-        ch = line[0]
+
         s = int(line[1])
         e = int(line[2])
 
-        strand = "+"
-        if line[3] == "2":
-            strand = "-"
+        strand = line[5]
+        # if line[3] == "2":
+        #     strand = "-"
 
-        r = int(line[6])
+        iv1 = HTSeq.GenomicInterval(line[0], s-1, e, strand)
 
-        iv1 = HTSeq.GenomicInterval(ch, s-1, e, strand)
-
-        ga[iv1] += r
-
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
-
-        if key not in ss_complex:
-            ss_complex[key] = list()
-        ss_complex[key].append(str(e)+":"+line[6])
-        if key2 not in ss_complex:
-            ss_complex[key2] = list()
-        ss_complex[key2].append(str(s)+":"+line[6])
-
-        if key not in ss_complex_total:
-            ss_complex_total[key] = 0
-        ss_complex_total[key]+=int(line[6])
-        if key2 not in ss_complex_total:
-            ss_complex_total[key2] = 0
-        ss_complex_total[key2]+=int(line[6])
+        reads = int(line[4])
+        gas[iv1] += reads
 
     f.close()
+    # print("finish set")
 
     f2 = open(totalsjfile)
 
+    ff = 1
     for eachLine in f2:
         # print(eachLine)
+        # GL000009.2      81150   122564  -
         line = eachLine.strip().split("\t")
-
-        if int(line[6])<2:
+        if line[0] != chr:
             continue
+        # print(eachLine.strip())
 
         # if int(line[4])<opt.sjreads:
         #     continue
 
-        ch = line[0]
         s = int(line[1])
         e = int(line[2])
 
-        strand = "+"
-        if line[3] == "2":
-            strand = "-"
+        strand = line[3]
+        # if line[3] == "2":
+        #     strand = "-"
 
-        ip = HTSeq.GenomicPosition(ch, s-1, strand)
-        ip2 = HTSeq.GenomicPosition(ch, e-1, strand)
+        iv1 = HTSeq.GenomicPosition(line[0], s-1, strand)
+        key = line[0] + "\t" + line[1] + "\t" + strand
+        clu = key
 
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
-
-        reads_dict[key]=ga[ip]
-        reads_dict[key2]=ga[ip2]
-
+        if clu not in olpclu:
+            f = gas[iv1]
+            olpclu[clu]= str(f)
         
+        iv1 = HTSeq.GenomicPosition(line[0], e-1, strand)
+        key = line[0] + "\t" + line[2] + "\t" + strand
+        clu = key
 
-        if key not in ss_use:
-            ss_use[key] = list()
-        ratio = round(float(line[6])/ss_complex_total[key2],2)
-        ss_use[key].append(str(e)+":"+str(ratio))
-        if key2 not in ss_use:
-            ss_use[key2] = list()
-        ratio = round(float(line[6])/ss_complex_total[key],2)
-        ss_use[key2].append(str(s)+":"+str(ratio))
+        if clu not in olpclu:
+            f = gas[iv1]
+            olpclu[clu]= str(f)
 
+        # ff+=1
+        # if ff > 0 and ff % 10000 == 0:
+        #     sys.stderr.write("%s : %d gene processed.\n" % (chr, ff))
     f2.close()
-    return reads_dict, ss_complex, ss_use
-    
+    olp[chr] = olpclu.copy()
+
+    # del olpclu
+    # del containclu
+    # del a5clu
+    # del a3clu
+    # print("done  "+chr)
+    logging.info("done  "+chr)
+    return
 
     # del reads_dict
 
@@ -349,54 +339,55 @@ def readChrwithBam():
 def main():
     print("Main procedure start...")
 
-    # 1.读入gff文件/gtf文件/annotationDB
-    # 读取gff，建立database，以info中的ID信息作为gene的标识，如果db文件已经存在则不需要再提供gff选项，否则db文件会被覆盖
-    # chrs = {}
-    # for chr in os.popen("cut -f 1 " + bedfile + " | sort |uniq").readlines():
-    #     chr = chr.strip()
-    #     # print(chr)
-    #     chrs[chr] = 1
+    pool = multiprocessing.Pool(processes=25,initializer=init_worker)
+    server = multiprocessing.Manager()
+    olp = server.dict()
+    contain = server.dict()
+    alt5p = server.dict()
+    alt3p = server.dict()
 
-    # 2.对每个染色体多线程处理，遍历每个gene，读取gene内的reads，进行计算
+    chrs = {}
+    for chr in os.popen("cut -f 1 " + opt.totalsj + " | sort |uniq").readlines():
+        chr = chr.strip()
+        # print(chr)
+        chrs[chr] = 1
 
-    # for chr in chrs:
-    #     if chr == "chrM":
-    #         continue
-    #     if not chr.startswith("chr"):
-    #         continue
-    #     reads[chr] = {}
-    #     readChrwithBam(chr, reads)
+    for chr in chrs:
+        if not chr.startswith("chr"):
+            continue
+        if chr.startswith("chrM"):
+            continue
+        # print(chr)
+        olp[chr] = {}
+        # readChrwithBam(chr, olp, contain, alt5p, alt3p)
+        # readChrwithBam(chr, olp)
+        pool.apply_async(readChrwithBam,args=(chr, olp))
+    try:
+        print("Waiting 10 seconds")
+        time.sleep(10)
+
+    except KeyboardInterrupt:
+        print("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+        pool.join()
+
+    else:
+        print("Quitting normally")
+        pool.close()
+        pool.join()
+
     
-    reads_dict,ss_complex,ss_use = readChrwithBam()
+    # olp,contain = readChrwithBam()
+    d = dict(olp).copy()  ## multiprocessing.Manager的遍历效率太低
 
-    br_dict = {}
-    f = open(opt.brfile)
-    for eachLine in f:
-        # chr10   100042573   100048757   -   172 1   0
-        line = eachLine.strip().split("\t")
+    w = open(opt.outfile, 'w')
 
-        ch = line[0]
-        s = int(line[1])+1
-        e = int(line[2])
 
-        strand = line[3]
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
-        br_dict[key] = int(line[5])
-        br_dict[key2] = int(line[6])
-    f.close()
-
-    w = open(opt.outfile+".filter2", 'w')
-    w.writelines("chr\tpos\tstrand\tsjcoverage\tfrom:sj\tfrom_num\tto:ratio\n")
-
-    for s in sorted(reads_dict):
-        if s not in br_dict:
-            br_dict[s]=0
-        ssc = ",".join(ss_complex[s])
-        sslen = len(ss_complex[s])
-        suc = ",".join(ss_use[s])
-        # sulen = len(ss_use[s])
-        w.writelines(s + "\t"+str(reads_dict[s]+br_dict[s])+"\t"+ssc+"\t"+str(sslen)+"\t"+suc+"\n")
+    i=1
+    for chr in sorted(d.keys()):
+        for s in d[chr]:
+            w.writelines(s+"\t"+ d[chr][s] + "\n")
+            i+=1
 
     w.close()
 

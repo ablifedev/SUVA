@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 ####################################################################################
@@ -39,8 +39,8 @@ import datetime
 
 from optparse import OptionParser, OptionGroup
 
-reload(sys)
-sys.setdefaultencoding('utf-8')
+# reload(sys)
+# sys.setdefaultencoding('utf-8')
 
 import subprocess
 import threading
@@ -76,10 +76,18 @@ def configOpt():
     # basic options
     p.add_option('-t', '--totalsj', dest='totalsj',
                  action='store', type='string', help='totalsj file')
-    p.add_option('-b', '--brfile', dest='brfile',
-                 action='store', type='string', help='br file')
+    p.add_option('-b', '--bed', dest='bed', action='store',
+                 type='string', help='junction file')
+    p.add_option('-l', '--bam', dest='bam', action='store',
+                 type='string', help='bam file')
+    p.add_option('-s', '--span', dest='span', action='store',
+                 type='int', default=4, help='boundary span,default is 4')
+    p.add_option('-j', '--sjreads', dest='sjreads', action='store',
+                 type='int', default=10, help='min sjreads,default is 10')
     p.add_option('-o', '--outfile', dest='outfile', default='Mapping_distribution.txt',
                  action='store', type='string', help='gene expression file')
+    p.add_option('-u', '--unstrand', dest='unstrand', default=False, action='store_true',
+                 help='unstrand library,antisense will not be considered.')
 
     group = OptionGroup(p, "Preset options")
     # preset options
@@ -115,6 +123,9 @@ def listToString(x):
         rVal += a + ' '
     return rVal
 
+# pool watcher for keybord interrupt
+def init_worker():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 # 解析参数
 opt_parser, opt, args = configOpt()
@@ -122,7 +133,7 @@ opt_parser, opt, args = configOpt()
 if opt.logDir == "":
     opt.logDir = opt.outDir + '/log/'
 
-
+sjnum = {}
 # 对参数进行有效性验证和初步处理
 
 
@@ -232,110 +243,276 @@ def getTotalBase(iv, coverage):
 
 
 # @profile
-def readChrwithBam():
-    # print(chr)
+def readChr(chr, reads):
+    print(chr)
     reads_dict = {}
-
-    ss_complex = {}
-    ss_complex_total = {}
-    ss_use = {}
+    reads_dict["left"] = {}
+    reads_dict["right"] = {}
     
 
     totalsjfile = opt.totalsj
+    bamfile = opt.bam
+    bam = HTSeq.BAM_Reader(bamfile)
 
-    # gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    ga = HTSeq.GenomicArray("auto", stranded=True, typecode='i')
+    reads_dict["left"] = {}
+    reads_dict["right"] = {}
 
-    f = open(totalsjfile)
-
-    for eachLine in f:
+    i = 0
+    j = 0
+    for eachLine in open(totalsjfile):
         line = eachLine.strip().split("\t")
-
-        if int(line[6])<2:
+        # chr7    34247275    34664347    +
+        if line[0] != chr:
             continue
-
-        # if int(line[4])<opt.sjreads:
-        #     continue
-        ch = line[0]
-        s = int(line[1])
-        e = int(line[2])
-
-        strand = "+"
-        if line[3] == "2":
-            strand = "-"
-
-        r = int(line[6])
-
-        iv1 = HTSeq.GenomicInterval(ch, s-1, e, strand)
-
-        ga[iv1] += r
-
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
-
-        if key not in ss_complex:
-            ss_complex[key] = list()
-        ss_complex[key].append(str(e)+":"+line[6])
-        if key2 not in ss_complex:
-            ss_complex[key2] = list()
-        ss_complex[key2].append(str(s)+":"+line[6])
-
-        if key not in ss_complex_total:
-            ss_complex_total[key] = 0
-        ss_complex_total[key]+=int(line[6])
-        if key2 not in ss_complex_total:
-            ss_complex_total[key2] = 0
-        ss_complex_total[key2]+=int(line[6])
-
-    f.close()
-
-    f2 = open(totalsjfile)
-
-    for eachLine in f2:
         # print(eachLine)
-        line = eachLine.strip().split("\t")
 
-        if int(line[6])<2:
-            continue
+        j += 1
+        if j > 0 and j % 1000 == 0:
+            sys.stderr.write("%s : %d sj processed.\n" % (chr, j))
+
+
+        i+=1
+        key = str(i)
+        # if line[0] == "chrM":
+        #     continue
+        # if not line[0].startswith("chr"):
+        #     continue
+
+        reads_left = 0
+        reads_right = 0
+
+        lss = line[0]+":"+line[1]+":"+line[3]
+        rss = line[0]+":"+line[2]+":"+line[3]
+
 
         # if int(line[4])<opt.sjreads:
         #     continue
 
-        ch = line[0]
         s = int(line[1])
         e = int(line[2])
 
-        strand = "+"
-        if line[3] == "2":
-            strand = "-"
+        iv1 = HTSeq.GenomicInterval(line[0], s - 1, s + opt.span, line[3])
+        iv2 = HTSeq.GenomicInterval(line[0], e - 1 - opt.span, e, line[3])
 
-        ip = HTSeq.GenomicPosition(ch, s-1, strand)
-        ip2 = HTSeq.GenomicPosition(ch, e-1, strand)
-
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
-
-        reads_dict[key]=ga[ip]
-        reads_dict[key2]=ga[ip2]
+        name = line[0] + "\t" + line[1] + "\t" + line[2]
 
         
+        # chr = name.split("\t")[0]
 
-        if key not in ss_use:
-            ss_use[key] = list()
-        ratio = round(float(line[6])/ss_complex_total[key2],2)
-        ss_use[key].append(str(e)+":"+str(ratio))
-        if key2 not in ss_use:
-            ss_use[key2] = list()
-        ratio = round(float(line[6])/ss_complex_total[key],2)
-        ss_use[key2].append(str(s)+":"+str(ratio))
+        if lss in reads_dict["left"]:
+            reads_left = reads_dict["left"][lss]
+        else:
+            iv = iv1
+            usedreads = {}
+            # print(">sj iv:")
+            # print(iv)
+            for r in bam[iv]:
+                if r.iv.length>150:
+                    continue
+                # print(r.iv)
+                flag = 0
+                for co in r.cigar:
+                    if co.type == "N":
+                        flag = 1
+                        break
+                if flag == 1:
+                    continue
+                # if r.iv.strand != iv.strand:
+                #     continue
+                if ((r.iv.strand != iv.strand and (not r.paired_end)) or (r.paired_end and r.iv.strand != iv.strand and r.pe_which == "first") or (r.paired_end and r.iv.strand == iv.strand and r.pe_which == "second")):
+                    continue
 
-    f2.close()
-    return reads_dict, ss_complex, ss_use
+                if r.iv.start < iv.start and r.iv.end >= iv.end:
+                    r_name = r.read.name
+                    if r_name in usedreads:
+                        continue
+                    else:
+                        usedreads[r.read.name] = ""
+                        reads_left += 1
+            reads_dict["left"][lss] = reads_left
+        # print(reads_left)
+
+        if rss in reads_dict["right"]:
+            reads_right = reads_dict["right"][rss]
+        else:
+            iv = iv2
+            usedreads = {}
+            for r in bam[iv]:
+                if r.iv.length>150:
+                    continue
+                flag = 0
+                for co in r.cigar:
+                    if co.type == "N":
+                        flag = 1
+                        break
+                if flag == 1:
+                    continue
+                # if r.iv.strand != iv.strand:
+                #     continue
+                if ((r.iv.strand != iv.strand and (not r.paired_end)) or (r.paired_end and r.iv.strand != iv.strand and r.pe_which == "first") or (r.paired_end and r.iv.strand == iv.strand and r.pe_which == "second")):
+                    continue
+                if r.iv.start <= iv.start and r.iv.end > iv.end:
+                    r_name = r.read.name
+                    if r_name in usedreads:
+                        continue
+                    else:
+                        usedreads[r.read.name] = ""
+                        reads_right += 1
+            reads_dict["right"][rss] = reads_right
+        # print(reads_right)
+
+        # if name not in sjnum:
+        #     sjnum[name] = "0"
+        # # print(d[c]["left"])
+
+        # tmp=eachLine.strip() + "\t" + sjnum[name] + "\t"
+        # if line[3] == "+":
+        #     tmp+=str(reads_left) + "\t" + str(reads_right) + "\n"
+        # else:
+        #     tmp+=str(reads_right) + "\t" + str(reads_left) + "\n"
+        # reads_dict[key] = tmp
+
+    # print(reads_dict)
+    reads[chr] = reads_dict.copy()
+    del reads_dict
+
+    logging.info("done %s" % chr)
+
+
+def readChr_unstrand(chr, reads):
+    print(chr)
+    reads_dict = {}
+    reads_dict["left"] = {}
+    reads_dict["right"] = {}
     
 
-    # del reads_dict
+    totalsjfile = opt.totalsj
+    bamfile = opt.bam
+    bam = HTSeq.BAM_Reader(bamfile)
 
-    # logging.info("done %s" % chr)
+    reads_dict["left"] = {}
+    reads_dict["right"] = {}
+
+    i = 0
+    j = 0
+    for eachLine in open(totalsjfile):
+        line = eachLine.strip().split("\t")
+        # chr7    34247275    34664347    +
+        if line[0] != chr:
+            continue
+        # print(eachLine)
+
+        j += 1
+        if j > 0 and j % 1000 == 0:
+            sys.stderr.write("%s : %d sj processed.\n" % (chr, j))
+
+
+        i+=1
+        key = str(i)
+        # if line[0] == "chrM":
+        #     continue
+        # if not line[0].startswith("chr"):
+        #     continue
+
+        reads_left = 0
+        reads_right = 0
+
+        lss = line[0]+":"+line[1]+":"+line[3]
+        rss = line[0]+":"+line[2]+":"+line[3]
+
+
+        # if int(line[4])<opt.sjreads:
+        #     continue
+
+        s = int(line[1])
+        e = int(line[2])
+
+        iv1 = HTSeq.GenomicInterval(line[0], s - 1, s + opt.span, ".")
+        iv2 = HTSeq.GenomicInterval(line[0], e - 1 - opt.span, e, ".")
+
+        name = line[0] + "\t" + line[1] + "\t" + line[2]
+
+        
+        # chr = name.split("\t")[0]
+
+        if lss in reads_dict["left"]:
+            reads_left = reads_dict["left"][lss]
+        else:
+            iv = iv1
+            usedreads = {}
+            # print(">sj iv:")
+            # print(iv)
+            for r in bam[iv]:
+                if r.iv.length>150:
+                    continue
+                # print(r.iv)
+                flag = 0
+                for co in r.cigar:
+                    if co.type == "N":
+                        flag = 1
+                        break
+                if flag == 1:
+                    continue
+                # if r.iv.strand != iv.strand:
+                #     continue
+                # if ((r.iv.strand != iv.strand and (not r.paired_end)) or (r.paired_end and r.iv.strand != iv.strand and r.pe_which == "first") or (r.paired_end and r.iv.strand == iv.strand and r.pe_which == "second")):
+                #     continue
+
+                if r.iv.start < iv.start and r.iv.end >= iv.end:
+                    r_name = r.read.name
+                    if r_name in usedreads:
+                        continue
+                    else:
+                        usedreads[r.read.name] = ""
+                        reads_left += 1
+            reads_dict["left"][lss] = reads_left
+        # print(reads_left)
+
+        if rss in reads_dict["right"]:
+            reads_right = reads_dict["right"][rss]
+        else:
+            iv = iv2
+            usedreads = {}
+            for r in bam[iv]:
+                if r.iv.length>150:
+                    continue
+                flag = 0
+                for co in r.cigar:
+                    if co.type == "N":
+                        flag = 1
+                        break
+                if flag == 1:
+                    continue
+                # if r.iv.strand != iv.strand:
+                #     continue
+                # if ((r.iv.strand != iv.strand and (not r.paired_end)) or (r.paired_end and r.iv.strand != iv.strand and r.pe_which == "first") or (r.paired_end and r.iv.strand == iv.strand and r.pe_which == "second")):
+                #     continue
+                if r.iv.start <= iv.start and r.iv.end > iv.end:
+                    r_name = r.read.name
+                    if r_name in usedreads:
+                        continue
+                    else:
+                        usedreads[r.read.name] = ""
+                        reads_right += 1
+            reads_dict["right"][rss] = reads_right
+        # print(reads_right)
+
+        # if name not in sjnum:
+        #     sjnum[name] = "0"
+        # # print(d[c]["left"])
+
+        # tmp=eachLine.strip() + "\t" + sjnum[name] + "\t"
+        # if line[3] == "+":
+        #     tmp+=str(reads_left) + "\t" + str(reads_right) + "\n"
+        # else:
+        #     tmp+=str(reads_right) + "\t" + str(reads_left) + "\n"
+        # reads_dict[key] = tmp
+
+    # print(reads_dict)
+    reads[chr] = reads_dict.copy()
+    del reads_dict
+
+    logging.info("done %s" % chr)
 
 
 # -----------------------------------------------------------------------------------
@@ -351,52 +528,112 @@ def main():
 
     # 1.读入gff文件/gtf文件/annotationDB
     # 读取gff，建立database，以info中的ID信息作为gene的标识，如果db文件已经存在则不需要再提供gff选项，否则db文件会被覆盖
-    # chrs = {}
-    # for chr in os.popen("cut -f 1 " + bedfile + " | sort |uniq").readlines():
-    #     chr = chr.strip()
-    #     # print(chr)
-    #     chrs[chr] = 1
+    bedfile = opt.bed
+    totalsjfile = opt.totalsj
+    chrs = {}
+    for chr in os.popen("cut -f 1 " + totalsjfile + " | sort |uniq").readlines():
+        chr = chr.strip()
+        if chr == "chrM":
+            continue
+        # print(chr)
+        chrs[chr] = 1
+
+    for eachLine in open(bedfile):
+        line = eachLine.strip().split("\t")
+        name = line[0] + "\t" + line[1] + "\t" + line[2]
+        c = line[0]
+        if c == "chrM":
+            continue
+        sjnum[name] = line[4]
 
     # 2.对每个染色体多线程处理，遍历每个gene，读取gene内的reads，进行计算
 
+    # reads = {}
     # for chr in chrs:
     #     if chr == "chrM":
     #         continue
     #     if not chr.startswith("chr"):
     #         continue
     #     reads[chr] = {}
-    #     readChrwithBam(chr, reads)
+    #     readChr(chr, reads)
     
-    reads_dict,ss_complex,ss_use = readChrwithBam()
+    # reads = readChr()
+    # print(reads)
 
-    br_dict = {}
-    f = open(opt.brfile)
-    for eachLine in f:
-        # chr10   100042573   100048757   -   172 1   0
+    # Watcher()
+    # pool = multiprocessing.Pool(processes=25)
+    # server = multiprocessing.Manager()
+    # reads = server.dict()
+
+    # for chr in chrs:
+    #     # print(chr)
+    #     reads[chr] = {}
+    #     pool.apply_async(readChr, args=(chr, reads))
+    # pool.close()
+    # pool.join()
+
+    # d = dict(reads).copy()  ## multiprocessing.Manager的遍历效率太低
+    # server.shutdown()
+    
+    pool = multiprocessing.Pool(processes=22,initializer=init_worker)
+    server = multiprocessing.Manager()
+    reads = server.dict()
+
+    chr_dict = readBamHeader(opt.bam)
+    for chr in chrs:
+        if chr == "chrM":
+            continue
+        reads[chr] = ""
+        # readChr(chr, reads, check, TMR)
+        # readChr(chr, reads)
+        if opt.unstrand:
+            pool.apply_async(readChr_unstrand, args=(chr, reads))
+        else:
+            pool.apply_async(readChr, args=(chr, reads))
+    try:
+        print("Waiting 10 seconds")
+        time.sleep(10)
+
+    except KeyboardInterrupt:
+        print("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+        pool.join()
+
+    else:
+        print("Quitting normally")
+        pool.close()
+        pool.join()
+
+    # readChr()
+    d = dict(reads).copy()  ## multiprocessing.Manager的遍历效率太低
+    server.shutdown()
+    w = open(opt.outfile, 'w')
+
+    for eachLine in open(totalsjfile):
         line = eachLine.strip().split("\t")
+        chrome = line[0]
+        if chrome == "chrM":
+            continue
+        # chr7    34247275    34664347    +
 
-        ch = line[0]
-        s = int(line[1])+1
-        e = int(line[2])
+        lss = line[0]+":"+line[1]+":"+line[3]
+        rss = line[0]+":"+line[2]+":"+line[3]
 
-        strand = line[3]
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
-        br_dict[key] = int(line[5])
-        br_dict[key2] = int(line[6])
-    f.close()
+        reads_left = d[chrome]["left"][lss]
+        reads_right = d[chrome]["right"][rss]
 
-    w = open(opt.outfile+".filter2", 'w')
-    w.writelines("chr\tpos\tstrand\tsjcoverage\tfrom:sj\tfrom_num\tto:ratio\n")
+        name = line[0] + "\t" + line[1] + "\t" + line[2]
 
-    for s in sorted(reads_dict):
-        if s not in br_dict:
-            br_dict[s]=0
-        ssc = ",".join(ss_complex[s])
-        sslen = len(ss_complex[s])
-        suc = ",".join(ss_use[s])
-        # sulen = len(ss_use[s])
-        w.writelines(s + "\t"+str(reads_dict[s]+br_dict[s])+"\t"+ssc+"\t"+str(sslen)+"\t"+suc+"\n")
+        if name not in sjnum:
+            sjnum[name] = "0"
+
+        tmp=eachLine.strip() + "\t" + sjnum[name] + "\t"
+        if line[3] == "+":
+            tmp+=str(reads_left) + "\t" + str(reads_right) + "\n"
+        else:
+            tmp+=str(reads_right) + "\t" + str(reads_left) + "\n"
+        
+        w.writelines(tmp)
 
     w.close()
 

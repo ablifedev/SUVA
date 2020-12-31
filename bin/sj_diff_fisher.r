@@ -19,7 +19,7 @@ Pvalue <-c()
 chivalue <- c()
 Ratiodiff <-c()
 for (i in 1:nrow(Data)) {
-	compare <- matrix(c(Data[i,11],Data[i,12],Data[i,15],Data[i,16]),nr=2)
+	compare <- matrix(c(Data[i,11],Data[i,12],Data[i,16],Data[i,17]),nr=2)
 	compare <- round(compare)
 	result <- fisher.test(compare)		#,alternative = "greater"
 	result2 <- chisq.test(compare,simulate.p.value=F,B=40000)

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3.6
 # -*- coding: utf-8 -*-
 
 ####################################################################################
@@ -39,8 +39,8 @@ import datetime
 
 from optparse import OptionParser, OptionGroup
 
-reload(sys)
-sys.setdefaultencoding('utf-8')
+# reload(sys)
+# sys.setdefaultencoding('utf-8')
 
 import subprocess
 import threading
@@ -51,9 +51,9 @@ import multiprocessing
 import signal
 from matplotlib import pyplot
 
-sys.path.insert(1, os.path.split(os.path.realpath(__file__))[0] + "/../")
+# sys.path.insert(1, os.path.split(os.path.realpath(__file__))[0] + "/../")
 # print(sys.path)
-from ablib.utils.tools import *
+# from ablib.utils.tools import *
 
 # 检查python的版本，我们需要使用python2.7
 # TODO: HTSeq升级到python3版本后升级程序到python3
@@ -76,8 +76,6 @@ def configOpt():
     # basic options
     p.add_option('-t', '--totalsj', dest='totalsj',
                  action='store', type='string', help='totalsj file')
-    p.add_option('-b', '--brfile', dest='brfile',
-                 action='store', type='string', help='br file')
     p.add_option('-o', '--outfile', dest='outfile', default='Mapping_distribution.txt',
                  action='store', type='string', help='gene expression file')
 
@@ -114,6 +112,10 @@ def listToString(x):
     for a in x:
         rVal += a + ' '
     return rVal
+
+# pool watcher for keybord interrupt
+def init_worker():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 # 解析参数
@@ -232,31 +234,29 @@ def getTotalBase(iv, coverage):
 
 
 # @profile
-def readChrwithBam():
-    # print(chr)
-    reads_dict = {}
-
-    ss_complex = {}
-    ss_complex_total = {}
-    ss_use = {}
+def readChrwithBam(chr, olp, contain, alt5p, alt3p):
+    print(chr)
     
 
     totalsjfile = opt.totalsj
 
-    # gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    ga = HTSeq.GenomicArray("auto", stranded=True, typecode='i')
+    gas = HTSeq.GenomicArrayOfSets([chr], stranded=True)
+
+    olpclu = {}
+    containclu = {}
+    a5clu = {}
+    a3clu = {}
 
     f = open(totalsjfile)
 
     for eachLine in f:
         line = eachLine.strip().split("\t")
-
-        if int(line[6])<2:
+        # print(line[0])
+        if line[0] != chr:
             continue
+        # print(eachLine)
 
-        # if int(line[4])<opt.sjreads:
-        #     continue
-        ch = line[0]
+
         s = int(line[1])
         e = int(line[2])
 
@@ -264,44 +264,27 @@ def readChrwithBam():
         if line[3] == "2":
             strand = "-"
 
-        r = int(line[6])
+        iv1 = HTSeq.GenomicInterval(line[0], s-1, e, strand)
 
-        iv1 = HTSeq.GenomicInterval(ch, s-1, e, strand)
-
-        ga[iv1] += r
-
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
-
-        if key not in ss_complex:
-            ss_complex[key] = list()
-        ss_complex[key].append(str(e)+":"+line[6])
-        if key2 not in ss_complex:
-            ss_complex[key2] = list()
-        ss_complex[key2].append(str(s)+":"+line[6])
-
-        if key not in ss_complex_total:
-            ss_complex_total[key] = 0
-        ss_complex_total[key]+=int(line[6])
-        if key2 not in ss_complex_total:
-            ss_complex_total[key2] = 0
-        ss_complex_total[key2]+=int(line[6])
+        key = line[0] + "\t" + line[1] + "\t" + line[2] + "\t" + strand
+        gas[iv1] += key
 
     f.close()
+    # print("finish set")
 
     f2 = open(totalsjfile)
 
+    ff = 1
     for eachLine in f2:
         # print(eachLine)
         line = eachLine.strip().split("\t")
-
-        if int(line[6])<2:
+        if line[0] != chr:
             continue
+        # print(eachLine.strip())
 
         # if int(line[4])<opt.sjreads:
         #     continue
 
-        ch = line[0]
         s = int(line[1])
         e = int(line[2])
 
@@ -309,29 +292,64 @@ def readChrwithBam():
         if line[3] == "2":
             strand = "-"
 
-        ip = HTSeq.GenomicPosition(ch, s-1, strand)
-        ip2 = HTSeq.GenomicPosition(ch, e-1, strand)
+        iv1 = HTSeq.GenomicInterval(line[0], s-1, e, strand)
+        sjlen = e - s + 1
+        key = line[0] + "\t" + line[1] + "\t" + line[2] + "\t" + strand
 
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
+        for iv, fs in gas[iv1].steps():
+            iv_len = iv.length
+            if len(fs) > 1:
+                # print(key)
 
-        reads_dict[key]=ga[ip]
-        reads_dict[key2]=ga[ip2]
-
-        
-
-        if key not in ss_use:
-            ss_use[key] = list()
-        ratio = round(float(line[6])/ss_complex_total[key2],2)
-        ss_use[key].append(str(e)+":"+str(ratio))
-        if key2 not in ss_use:
-            ss_use[key2] = list()
-        ratio = round(float(line[6])/ss_complex_total[key],2)
-        ss_use[key2].append(str(s)+":"+str(ratio))
-
+                for f in list(fs):
+                    if f == key:
+                        continue
+                    else:
+                        line2 = f.split("\t")
+                        slen = int(line2[2])-int(line2[1])+1
+                        if (int(line2[1]) == s and strand == "+" ) or (int(line2[2]) == e and strand == "-"):
+                            if slen >= sjlen:
+                                clu = key + "\t" + f
+                                a3clu[clu]=""
+                            else:
+                                clu = f + "\t" + key
+                                a3clu[clu]=""
+                        elif (int(line2[1]) == s and strand == "-" ) or (int(line2[2]) == e and strand == "+"):
+                            if slen >= sjlen:
+                                clu = key + "\t" + f
+                                a5clu[clu]=""
+                            else:
+                                clu = f + "\t" + key
+                                a5clu[clu]=""
+                        elif (int(line2[1]) > s and int(line2[1])< e and int(line2[2]) > e ) or (int(line2[2]) > s and int(line2[2])< e and int(line2[1]) < s ):
+                            if slen >= sjlen:
+                                clu = key + "\t" + f
+                                olpclu[clu]=""
+                            else:
+                                clu = f + "\t" + key
+                                olpclu[clu]=""
+                        elif (int(line2[1]) > s and int(line2[2])< e and (int(line2[1])-s<=500 or int(line2[2]) - e>=-500)) or (int(line2[1]) < s and int(line2[2]) > e and (int(line2[1])-e<=500 or int(line2[2]) - s>=-500)):
+                            if slen >= sjlen:
+                                clu = key + "\t" + f
+                                containclu[clu]=""
+                            else:
+                                clu = f + "\t" + key
+                                containclu[clu]=""
+        # ff+=1
+        # if ff > 0 and ff % 10000 == 0:
+        #     sys.stderr.write("%s : %d gene processed.\n" % (chr, ff))
     f2.close()
-    return reads_dict, ss_complex, ss_use
-    
+    olp[chr] = olpclu.copy()
+    contain[chr] = containclu.copy()
+    alt5p[chr] = a5clu.copy()
+    alt3p[chr] = a3clu.copy()
+    # del olpclu
+    # del containclu
+    # del a5clu
+    # del a3clu
+    # print("done  "+chr)
+    logging.info("done  "+chr)
+    return
 
     # del reads_dict
 
@@ -349,54 +367,78 @@ def readChrwithBam():
 def main():
     print("Main procedure start...")
 
-    # 1.读入gff文件/gtf文件/annotationDB
-    # 读取gff，建立database，以info中的ID信息作为gene的标识，如果db文件已经存在则不需要再提供gff选项，否则db文件会被覆盖
-    # chrs = {}
-    # for chr in os.popen("cut -f 1 " + bedfile + " | sort |uniq").readlines():
-    #     chr = chr.strip()
-    #     # print(chr)
-    #     chrs[chr] = 1
+    pool = multiprocessing.Pool(processes=25,initializer=init_worker)
+    server = multiprocessing.Manager()
+    olp = server.dict()
+    contain = server.dict()
+    alt5p = server.dict()
+    alt3p = server.dict()
 
-    # 2.对每个染色体多线程处理，遍历每个gene，读取gene内的reads，进行计算
+    chrs = {}
+    for chr in os.popen("cut -f 1 " + opt.totalsj + " | sort |uniq").readlines():
+        chr = chr.strip()
+        # print(chr)
+        chrs[chr] = 1
 
-    # for chr in chrs:
-    #     if chr == "chrM":
-    #         continue
-    #     if not chr.startswith("chr"):
-    #         continue
-    #     reads[chr] = {}
-    #     readChrwithBam(chr, reads)
+    for chr in chrs:
+        if not chr.startswith("chr"):
+            continue
+        if chr.startswith("chrM"):
+            continue
+        # print(chr)
+        olp[chr] = {}
+        contain[chr] = {}
+        alt5p[chr] = {}
+        alt3p[chr] = {}
+        # readChrwithBam(chr, olp, contain)
+        pool.apply_async(readChrwithBam,args=(chr, olp, contain, alt5p, alt3p))
+    try:
+        print("Waiting 10 seconds")
+        time.sleep(10)
+
+    except KeyboardInterrupt:
+        print("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+        pool.join()
+
+    else:
+        print("Quitting normally")
+        pool.close()
+        pool.join()
+
     
-    reads_dict,ss_complex,ss_use = readChrwithBam()
+    # olp,contain = readChrwithBam()
+    d = dict(olp).copy()  ## multiprocessing.Manager的遍历效率太低
+    c = dict(contain).copy()
+    a5 = dict(alt5p).copy()  ## multiprocessing.Manager的遍历效率太低
+    a3 = dict(alt3p).copy()
 
-    br_dict = {}
-    f = open(opt.brfile)
-    for eachLine in f:
-        # chr10   100042573   100048757   -   172 1   0
-        line = eachLine.strip().split("\t")
+    w = open(opt.outfile, 'w')
 
-        ch = line[0]
-        s = int(line[1])+1
-        e = int(line[2])
 
-        strand = line[3]
-        key = ch + "\t" + str(s) + "\t" + strand
-        key2 = ch + "\t" + str(e) + "\t" + strand
-        br_dict[key] = int(line[5])
-        br_dict[key2] = int(line[6])
-    f.close()
+    i=1
+    for chr in sorted(d.keys()):
+        for s in d[chr]:
+            w.writelines("cluolp"+str(i)+"\t"+s + "\tolp\n")
+            i+=1
 
-    w = open(opt.outfile+".filter2", 'w')
-    w.writelines("chr\tpos\tstrand\tsjcoverage\tfrom:sj\tfrom_num\tto:ratio\n")
+    i = 1
+    for chr in sorted(c.keys()):
+        for m in c[chr]:
+            w.writelines("clucontain"+str(i)+"\t"+m + "\tcontain\n")
+            i+=1
 
-    for s in sorted(reads_dict):
-        if s not in br_dict:
-            br_dict[s]=0
-        ssc = ",".join(ss_complex[s])
-        sslen = len(ss_complex[s])
-        suc = ",".join(ss_use[s])
-        # sulen = len(ss_use[s])
-        w.writelines(s + "\t"+str(reads_dict[s]+br_dict[s])+"\t"+ssc+"\t"+str(sslen)+"\t"+suc+"\n")
+    i=1
+    for chr in sorted(a5.keys()):
+        for s in a5[chr]:
+            w.writelines("clualt5p"+str(i)+"\t"+s + "\talt5p\n")
+            i+=1
+
+    i=1
+    for chr in sorted(a3.keys()):
+        for s in a3[chr]:
+            w.writelines("clualt3p"+str(i)+"\t"+s + "\talt3p\n")
+            i+=1
 
     w.close()
 

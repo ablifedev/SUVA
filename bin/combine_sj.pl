@@ -5,7 +5,7 @@ open IN,  "$ARGV[1]\_sjclu";
 while (<IN>) {
     chomp;
     @line    = split(/\t/);
-    $value   = "$line[10]\t$line[11]\t$line[12]\t$line[13]";
+    $value   = "$line[10]\t$line[11]\t$line[12]\t$line[13]\t$line[14]";
     $key     = join( "\t", @line[ 0 .. 9 ] );
     $t{$key} = $value;
 }
@@ -14,7 +14,7 @@ open IN, "$ARGV[2]\_sjclu";
 while (<IN>) {
     chomp;
     @line    = split(/\t/);
-    $value   = "$line[10]\t$line[11]\t$line[12]\t$line[13]";
+    $value   = "$line[10]\t$line[11]\t$line[12]\t$line[13]\t$line[14]";
     $key     = join( "\t", @line[ 0 .. 9 ] );
     $n{$key} = $value;
 }
@@ -31,7 +31,7 @@ open OUT, ">$ARGV[0]\_combine_sj_ratio_all";
 while (<IN>) {
     chomp;
     my @line = split(/\t/);
-    my $r    = $line[12] - $line[16];
+    my $r    = $line[12] - $line[17];
     print OUT $_, "\t", $r, "\n";
 }
 close IN;
@@ -43,8 +43,8 @@ open OUT, ">$ARGV[0]\_combine_sj_ratio";
 while (<IN>) {
     chomp;
     my @line = split(/\t/);
-    my $r    = $line[12] - $line[16];
-    if ( ( $line[12] >= 0.15 || $line[16] >= 0.15 ) && ( $line[13] >= 0.15 || $line[17] >= 0.15 ) && ($line[10]+$line[14]>=2) && ($line[11]+$line[15]>=2) ) {
+    my $r    = $line[12] - $line[17];
+    if ( ( $line[12] >= 0.15 || $line[17] >= 0.15 ) && ( $line[13] >= 0.15 || $line[18] >= 0.15 ) && ($line[10]+$line[15]>=2) && ($line[11]+$line[16]>=2) && ($line[10]+$line[11]>=2) && ($line[15]+$line[16]>=2)) {
         print OUT $_, "\t", $r, "\n";
     }
 }

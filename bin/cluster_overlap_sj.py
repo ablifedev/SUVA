@@ -1,16 +1,35 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3.6
 # -*- coding: utf-8 -*-
 
 ####################################################################################
 # Copyright (C) 2015-2019 by ABLIFE
 ####################################################################################
-
+# 名称：expression_quantity_calculation.py
+# 描述：计算表达量
+# 作者：程超
+# 创建时间：2015-4-10
+# 联系方式：chaocheng@ablife.cc
+####################################################################################
+# 修改记录
+####################################################################################
+# Date           Version       Author            ChangeLog
+# 2015-4-10      v0.1          ChengChao         创建测试版本
+# 2015-7-24      v1.0          ChengChao         加入对bed文件支持；对于bed格式先扫描所有
+#                                                所有基因，记录区域信息，再扫描bed iv
+#
+#
+#####################################################################################
 
 """
-
+程序功能说明：
+1.计算gene表达量
+2.randCheck_gene
+3.randCheck_mRNA
+程序设计思路：
+利用gffutils和HTSeq包进行统计
 """
 
-# 
+# 导入必要的包
 import re
 import os
 import sys
@@ -20,19 +39,21 @@ import datetime
 
 from optparse import OptionParser, OptionGroup
 
-reload(sys)
-sys.setdefaultencoding('utf-8')
+# reload(sys)
+# sys.setdefaultencoding('utf-8')
 
 import subprocess
 import threading
+import gffutils
 import HTSeq
 import numpy
 import multiprocessing
 import signal
+from matplotlib import pyplot
 
-sys.path.insert(1, os.path.split(os.path.realpath(__file__))[0] + "/../")
+# sys.path.insert(1, os.path.split(os.path.realpath(__file__))[0] + "/../")
 # print(sys.path)
-from ablib.utils.tools import *
+# from ablib.utils.tools import *
 
 # 检查python的版本，我们需要使用python2.7
 # TODO: HTSeq升级到python3版本后升级程序到python3
@@ -84,51 +105,6 @@ def configOpt():
     return (p, opt, args)
 
 
-class Watcher:
-    """this class solves two problems with multithreaded
-    programs in Python, (1) a signal might be delivered
-    to any thread (which is just a malfeature) and (2) if
-    the thread that gets the signal is waiting, the signal
-    is ignored (which is a bug).
-
-    The watcher is a concurrent process (not thread) that
-    waits for a signal and the process that contains the
-    threads.  See Appendix A of The Little Book of Semaphores.
-    http://greenteapress.com/semaphores/
-
-    I have only tested this on Linux.  I would expect it to
-    work on the Macintosh and not work on Windows.
-    """
-
-    def __init__(self):
-        """ Creates a child thread, which returns.  The parent
-            thread waits for a KeyboardInterrupt and then kills
-            the child thread.
-        """
-        self.child = os.fork()
-        if self.child == 0:
-            return
-        else:
-            self.watch()
-
-    def watch(self):
-        try:
-            os.wait()
-        except KeyboardInterrupt:
-            # I put the capital B in KeyBoardInterrupt so I can
-            # tell when the Watcher gets the SIGINT
-            print('KeyBoardInterrupt')
-            self.kill()
-        sys.exit()
-
-    def kill(self):
-        try:
-            os.kill(self.child, signal.SIGKILL)
-        except OSError:
-            pass
-
-
-
 def listToString(x):
     """获得完整的命令
     """
@@ -136,6 +112,10 @@ def listToString(x):
     for a in x:
         rVal += a + ' '
     return rVal
+
+# pool watcher for keybord interrupt
+def init_worker():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 # 解析参数
@@ -280,9 +260,9 @@ def readChrwithBam(chr, olp, contain, alt5p, alt3p):
         s = int(line[1])
         e = int(line[2])
 
-        strand = "+"
-        if line[3] == "2":
-            strand = "-"
+        strand = line[3]
+        # if line[3] == "2":
+        #     strand = "-"
 
         iv1 = HTSeq.GenomicInterval(line[0], s-1, e, strand)
 
@@ -308,9 +288,9 @@ def readChrwithBam(chr, olp, contain, alt5p, alt3p):
         s = int(line[1])
         e = int(line[2])
 
-        strand = "+"
-        if line[3] == "2":
-            strand = "-"
+        strand = line[3]
+        # if line[3] == "2":
+        #     strand = "-"
 
         iv1 = HTSeq.GenomicInterval(line[0], s-1, e, strand)
         sjlen = e - s + 1
@@ -341,14 +321,14 @@ def readChrwithBam(chr, olp, contain, alt5p, alt3p):
                             else:
                                 clu = f + "\t" + key
                                 a5clu[clu]=""
-                        elif (int(line2[1]) > s and int(line2[1])< e and int(line2[2]) > e ) or (int(line2[2]) > s and int(line2[2])< e and int(line2[1]) < s ):
+                        elif (int(line2[1]) > s and int(line2[1])< e and int(line2[2]) > e and int(line2[2]) - e<=500 and int(line2[1])-s<=500 ) or (int(line2[2]) > s and int(line2[2])< e and int(line2[1]) < s and e - int(line2[2]) <=500 and s - int(line2[1])<=500 ):
                             if slen >= sjlen:
                                 clu = key + "\t" + f
                                 olpclu[clu]=""
                             else:
                                 clu = f + "\t" + key
                                 olpclu[clu]=""
-                        elif (int(line2[1]) > s and int(line2[2])< e) or (int(line2[1]) < s and int(line2[2]) > e):
+                        elif (int(line2[1]) > s and int(line2[2])< e and (int(line2[1])-s<=500 and int(line2[2]) - e>=-500)) or (int(line2[1]) < s and int(line2[2]) > e and (int(line2[2])-e<=500 and int(line2[1]) - s>=-500)):
                             if slen >= sjlen:
                                 clu = key + "\t" + f
                                 containclu[clu]=""
@@ -367,7 +347,8 @@ def readChrwithBam(chr, olp, contain, alt5p, alt3p):
     # del containclu
     # del a5clu
     # del a3clu
-    print("done  "+chr)
+    # print("done  "+chr)
+    logging.info("done  "+chr)
     return
 
     # del reads_dict
@@ -386,18 +367,20 @@ def readChrwithBam(chr, olp, contain, alt5p, alt3p):
 def main():
     print("Main procedure start...")
 
-    Watcher()
-    pool = multiprocessing.Pool(processes=15)
+    pool = multiprocessing.Pool(processes=25,initializer=init_worker)
     server = multiprocessing.Manager()
     olp = server.dict()
     contain = server.dict()
     alt5p = server.dict()
     alt3p = server.dict()
 
-    tmp = os.popen('cut -f 1 ' + opt.totalsj + ' | sort | uniq').readlines()
-
-    for chr in tmp:
+    chrs = {}
+    for chr in os.popen("cut -f 1 " + opt.totalsj + " | sort |uniq").readlines():
         chr = chr.strip()
+        # print(chr)
+        chrs[chr] = 1
+
+    for chr in chrs:
         if not chr.startswith("chr"):
             continue
         if chr.startswith("chrM"):
@@ -407,10 +390,22 @@ def main():
         contain[chr] = {}
         alt5p[chr] = {}
         alt3p[chr] = {}
-        # readChrwithBam(chr, olp, contain)
+        # readChrwithBam(chr, olp, contain, alt5p, alt3p)
         pool.apply_async(readChrwithBam,args=(chr, olp, contain, alt5p, alt3p))
-    pool.close()
-    pool.join()
+    try:
+        print("Waiting 10 seconds")
+        time.sleep(10)
+
+    except KeyboardInterrupt:
+        print("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+        pool.join()
+
+    else:
+        print("Quitting normally")
+        pool.close()
+        pool.join()
+
     
     # olp,contain = readChrwithBam()
     d = dict(olp).copy()  ## multiprocessing.Manager的遍历效率太低
