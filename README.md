@@ -8,7 +8,7 @@ Website： https://github.com/ablifedev/SUVA/
 
 ## Download
 
-Download current release: [SUVA_v2.0](https://github.com/ablifedev/SUVA/archive/SUVA_v2.0.tar.gz)
+Download current release: [SUVA_v2.0](https://github.com/ablifedev/SUVA/archive/v2.0.tar.gz)
 
 
 ## Installation
