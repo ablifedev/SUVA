@@ -37,5 +37,7 @@ After all of the requirments being installed, you can install the program as fol
 
 You can follow the example instruction in example data folder. Simply, after you make a config file, you can run the pipeline with the command:
 
-    `perl suva.pl -c sample_config -g gff_file -a geneanno_file -p fdr_threshold_for_filter -t cpu_number`
+    `perl suva.pl -c suva_samplepair.config -g gff_file -a geneanno_file -p fdr_threshold_for_filter -t cpu_number`
+
+For comparision of groups with replicates, you can use the template config file: suva_rep.config
 
