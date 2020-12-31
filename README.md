@@ -41,3 +41,4 @@ You can follow the example instruction in example data folder. Simply, after you
 
 For comparision of groups with replicates, you can use the template config file: suva_rep.config
 
+We also provide SGE (Sun Grid Engine) version: suva-sge.pl
